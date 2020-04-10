@@ -1,8 +1,21 @@
 #include "Communication.h"
 
-uint8_t USART0_Pack[COMM_PACK_MAX_SIZE + 2] = {0x00};
-uint8_t USART0_PackSize = 0;
-uint8_t COMM_Connect_State = COMM_STATE0;
+Communication::Communication(HardwareSerial *_serialPort, long _baudRate, uint8_t _packMaxSize,
+                             uint8_t _charDelayTime, uint8_t _streamWaitTime, uint8_t _transferTimeOut)
+{
+    serialPort = _serialPort;
+    baudRate = _baudRate;
+    packMaxSize = _packMaxSize;
+    charDelayTime = _charDelayTime;
+    streamWaitTime = _streamWaitTime;
+    transferTimeOut = _transferTimeOut;
+    //Init Communication
+    USARTPack = new uint8_t[packMaxSize + 2];
+    USARTPackSize = 0;
+    COMMConnectState = COMM_STATE0;
+    memset(USARTPackSize, 0, sizeof(uint8_t) * (packMaxSize + 2));
+    serialPort->begin(baudRate;)
+}
 
 bool Communication_HasReaded()
 {

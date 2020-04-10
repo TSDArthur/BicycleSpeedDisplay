@@ -1,15 +1,11 @@
 #ifndef __COMMUNICATION_H
 #define __COMMUNICATION_H
-#include "Arduino.h"
-#include "Devices.h"
+
 #include "Core.h"
-#include "FirmwareInfo.h"
-#include "string.h"
-#include "String.h"
 #include "HardwareSerial.h"
 #include "Wire.h"
-#define COMM_SERIAL_BAUD 115200
-//
+
+//Defines
 #define COMM_START_SYMBOL 0x7f
 #define COMM_SPEC_SYMBOL 0x7e
 #define COMM_SET_SYMBOL 0x7d
@@ -22,17 +18,28 @@
 #define COMM_STATE0 0
 #define COMM_STATE1 1
 #define COMM_STATE2 2
-#define COMM_PACK_MAX_SIZE 32
-//
-#define COMM_CHAR_TIME 1
-#define COMM_WAIT_TIME 20
-#define COMM_TIMEOUT 100
-extern uint8_t USART0_Pack[COMM_PACK_MAX_SIZE + 2];
-extern uint8_t USART0_PackSize;
-extern uint8_t COMM_Connect_State;
-bool Communication_HasReaded();
-bool Communication_Valid();
-bool Communication_RepeatTimes(uint8_t symbol, uint8_t count);
-void Communication_SendSpecialData(uint8_t count);
-void Communication_DoEvents();
+
+class Communication
+{
+private:
+    uint8_t *USARTPack;
+    uint8_t USARTPackSize;
+    uint8_t packMaxSize;
+    uint8_t charDelayTime;
+    uint8_t streamWaitTime;
+    uint8_t transferTimeOut;
+    uint8_t COMMConnectState;
+    long baudRate;
+    HardwareSerial *serialPort;
+    bool HasRead();
+    bool Valided();
+    bool RepeatTimes(uint8_t symbol, uint8_t count);
+    void SendSpecialData(uint8_t count);
+
+public:
+    Communication(HardwareSerial *_serialPort, long _baudRate, uint8_t _packMaxSize,
+                  uint8_t _charDelayTime, uint8_t _streamWaitTime, uint8_t _transferTimeOut);
+    void DoEvents();
+};
+
 #endif
