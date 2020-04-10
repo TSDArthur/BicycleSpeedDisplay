@@ -9,3 +9,5 @@
 - Host：上位机软件
 
 - Mechanical：机壳结构设计
+
+- PCB：印刷电路板设计
