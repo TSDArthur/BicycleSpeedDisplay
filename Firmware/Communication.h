@@ -1,45 +1,76 @@
-#ifndef __COMMUNICATION_H
-#define __COMMUNICATION_H
+#ifndef COMMUNICATION_H
+#define COMMUNICATION_H
 
-#include "Core.h"
-#include "HardwareSerial.h"
-#include "Wire.h"
+#include "Arduino.h"
+#include "WiFi.h"
+#include "Config.h"
 
-//Defines
-#define COMM_START_SYMBOL 0x7f
-#define COMM_SPEC_SYMBOL 0x7e
-#define COMM_SET_SYMBOL 0x7d
-#define COMM_END_SYMBOL 0x7c
-#define COMM_CONNECT_SPEC_NUM 2
-#define COMM_TRANSEND_SPEC_NUM 3
-#define COMM_CONTINUE_SPEC_NUM 4
-#define COMM_RESET_SPEC_NUM 5
-#define COMM_CLEAR_DEVICES_STATE_NUM 6
-#define COMM_STATE0 0
-#define COMM_STATE1 1
-#define COMM_STATE2 2
+enum CommunicationState
+{
+    OFFLINE,
+    SENDCLIENTNAME,
+    SENDDATA,
+    WAITFORRESP
+};
+
+struct CommunicationStateBlock
+{
+    void (*WiFiEvents)(WiFiEvent_t event);
+    volatile bool WiFiCommunicated;
+    volatile bool ServerCommunicated;
+    CommunicationState communicationState;
+};
+
+#define CommunicationState(structName, wifiISPName)                                   \
+    void wifiISPName(WiFiEvent_t event);                                              \
+    struct CommunicationStateBlock structName = {wifiISPName, false, false, OFFLINE}; \
+    void wifiISPName(WiFiEvent_t event)                                               \
+    {                                                                                 \
+        switch (event)                                                                \
+        {                                                                             \
+        case SYSTEM_EVENT_STA_GOT_IP:                                                 \
+            structName.WiFiCommunicated = true;                                       \
+            structName.ServerCommunicated = false;                                    \
+            structName.communicationState = OFFLINE;                                  \
+            break;                                                                    \
+        case SYSTEM_EVENT_STA_LOST_IP:                                                \
+        case SYSTEM_EVENT_STA_DISCONNECTED:                                           \
+            structName.WiFiCommunicated = false;                                      \
+            structName.ServerCommunicated = false;                                    \
+            structName.communicationState = OFFLINE;                                  \
+            break;                                                                    \
+        default:                                                                      \
+            break;                                                                    \
+        }                                                                             \
+    }
 
 class Communication
 {
 private:
-    uint8_t *USARTPack;
-    uint8_t USARTPackSize;
-    uint8_t packMaxSize;
-    uint8_t charDelayTime;
-    uint8_t streamWaitTime;
-    uint8_t transferTimeOut;
-    uint8_t COMMConnectState;
-    long baudRate;
-    HardwareSerial *serialPort;
-    bool HasRead();
-    bool Valided();
-    bool RepeatTimes(uint8_t symbol, uint8_t count);
-    void SendSpecialData(uint8_t count);
+    WiFiUDP *wifiUDP;
+    const char *WiFiSSID;
+    const char *WiFiPassword;
+    const char *serverIPAddress;
+    int serverPort;
+    int localPort;
+    const char *streamEncrKey;
 
 public:
-    Communication(HardwareSerial *_serialPort, long _baudRate, uint8_t _packMaxSize,
-                  uint8_t _charDelayTime, uint8_t _streamWaitTime, uint8_t _transferTimeOut);
-    void DoEvents();
+    struct CommunicationStateBlock *communicationStateBlock;
+    String *streamToSend;
+    String *streamRecieved;
+    Communication(struct CommunicationStateBlock *_communicationStateBlock, const char *_WiFiSSID, const char *_WiFiPassword,
+                  const char *_serverIPAddress, int _serverPort, int _localPort, const char *_streamEncrKey);
+    bool GetWiFiConnectionState();
+    bool GetServerConnectionState();
+    void StreamBuilder(String *stream, CommunicationState streamType, int dataValue);
+    String *StreamProcess(String *stream);
+    bool StreamValid(String *stream);
+    bool StreamContentCheck(String *stream, CommunicationState streamType);
+    void SendPacket(String *stream);
+    bool PacketRecieved();
+    void ClearRecievedPacket();
+    void Dispose();
 };
 
 #endif

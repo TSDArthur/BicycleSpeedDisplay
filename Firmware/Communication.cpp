@@ -1,226 +1,144 @@
 #include "Communication.h"
 
-Communication::Communication(HardwareSerial *_serialPort, long _baudRate, uint8_t _packMaxSize,
-                             uint8_t _charDelayTime, uint8_t _streamWaitTime, uint8_t _transferTimeOut)
+Communication::Communication(struct CommunicationStateBlock *_communicationStateBlock, const char *_WiFiSSID, const char *_WiFiPassword,
+                             const char *_serverIPAddress, int _serverPort, int _localPort, const char *_streamEncrKey)
 {
-    serialPort = _serialPort;
-    baudRate = _baudRate;
-    packMaxSize = _packMaxSize;
-    charDelayTime = _charDelayTime;
-    streamWaitTime = _streamWaitTime;
-    transferTimeOut = _transferTimeOut;
-    //Init Communication
-    USARTPack = new uint8_t[packMaxSize + 2];
-    USARTPackSize = 0;
-    COMMConnectState = COMM_STATE0;
-    memset(USARTPackSize, 0, sizeof(uint8_t) * (packMaxSize + 2));
-    serialPort->begin(baudRate;)
+    // 控制块赋值
+    communicationStateBlock = _communicationStateBlock;
+    // 初始化变量
+    WiFiSSID = _WiFiSSID;
+    WiFiPassword = _WiFiPassword;
+    serverIPAddress = _serverIPAddress;
+    serverPort = _serverPort;
+    localPort = _localPort;
+    wifiUDP = new WiFiUDP();
+    streamEncrKey = _streamEncrKey;
+    streamToSend = new String();
+    streamRecieved = new String();
+    streamToSend->clear();
+    streamRecieved->clear();
+    // 连接到WiFi网络
+    WiFi.disconnect(true);
+    WiFi.onEvent(communicationStateBlock->WiFiEvents);
+    WiFi.begin(WiFiSSID, WiFiPassword);
+    // 初始化UDP监听
+    wifiUDP->begin(localPort);
 }
 
-bool Communication_HasReaded()
+bool Communication::GetWiFiConnectionState()
 {
-    bool retValue = false;
-    while (Serial.available() > 0)
+    return communicationStateBlock->WiFiCommunicated;
+}
+
+bool Communication::GetServerConnectionState()
+{
+    return GetWiFiConnectionState() & communicationStateBlock->ServerCommunicated;
+}
+
+void Communication::StreamBuilder(String *stream, CommunicationState streamType, int dataValue)
+{
+    stream->clear();
+    *stream += COMMUNICATION_STREAMBEGIN;
+    switch (streamType)
     {
-        uint8_t tmp = (uint8_t)Serial.read();
-        //If start symbol meets or pack is too long.
-        if (tmp == COMM_START_SYMBOL || USART0_PackSize > COMM_PACK_MAX_SIZE)
+    case OFFLINE:
+        *stream += COMMUNICATION_REQSTR;
+        break;
+    case SENDCLIENTNAME:
+        *stream += COMMUNICATION_REPNAMESTR;
+        *stream += COMMUNICATION_DEVICENAME;
+        break;
+    case SENDDATA:
+        *stream += COMMUNICATION_SPDSTR;
+        *stream += dataValue;
+        break;
+    default:
+        break;
+    }
+    *stream += COMMUNICATION_STREAMEND;
+}
+
+String *Communication::StreamProcess(String *stream)
+{
+    if (COMMUNICATION_ENCRYEN)
+    {
+        int streamLength = stream->length();
+        for (int i = 0; i < streamLength; i++)
         {
-            USART0_PackSize = 0;
-        }
-        USART0_Pack[USART0_PackSize++] = tmp;
-        //If end symbol meets.
-        if (tmp == COMM_END_SYMBOL)
-        {
-            USART0_Pack[USART0_PackSize] = '\0';
-            retValue = true;
-            return retValue;
+            stream->setCharAt(i, (char)(stream->charAt(i) ^ streamEncrKey[i % COMMUNICATION_ENCRKEY_SIZE]));
         }
     }
-    return retValue;
+    return stream;
 }
 
-bool Communication_Valid()
-{
-    bool retValue = true;
-    retValue = retValue && (USART0_PackSize > 2);
-    retValue = retValue && (USART0_Pack[0] == COMM_START_SYMBOL);
-    retValue = retValue && (USART0_Pack[USART0_PackSize - 1] == COMM_END_SYMBOL);
-    return retValue;
-}
-
-bool Communication_RepeatTimes(uint8_t symbol, uint8_t times)
+bool Communication::StreamValid(String *stream)
 {
     bool retValue = false;
-    uint8_t counter = 0;
-    for (int i = 1; i < USART0_PackSize - 1; i++)
-    {
-        if (USART0_Pack[i] == symbol)
-        {
-            counter++;
-        }
-        else
-        {
-            retValue = false;
-            return retValue;
-        }
-    }
-    if (counter == times)
+    if (stream->charAt(0) == COMMUNICATION_STREAMBEGIN && stream->charAt(stream->length() - 1) == COMMUNICATION_STREAMEND)
     {
         retValue = true;
     }
-    else
-    {
-        retValue = false;
-    }
     return retValue;
 }
 
-void Communication_SendSpecialData(uint8_t count)
-{
-    Serial.write(COMM_START_SYMBOL);
-    for (uint8_t i = 0; i < count; i++)
-    {
-        Serial.write(COMM_SPEC_SYMBOL);
-        delay(COMM_CHAR_TIME);
-    }
-    Serial.write(COMM_END_SYMBOL);
-    return;
-}
-
-bool Communication_WaitForSpecialDataResponse(uint8_t specialChar, uint8_t repeatTimes, uint8_t timeout)
+bool Communication::StreamContentCheck(String *stream, CommunicationState streamType)
 {
     bool retValue = false;
-    int waitCounter = 0;
-    do
+    switch (streamType)
     {
-        if (Communication_HasReaded() && Communication_Valid() && Communication_RepeatTimes(specialChar, repeatTimes))
+    case WAITFORRESP:
+        if (stream->substring(1, stream->length() - 2) == COMMUNICATION_RESPONSESTR)
         {
             retValue = true;
-            return retValue;
         }
-        else
-        {
-            waitCounter++;
-            if (waitCounter > timeout)
-            {
-                retValue = false;
-                return retValue;
-            }
-        }
-        delay(COMM_WAIT_TIME);
-    } while (true);
+        break;
+    }
     return retValue;
 }
 
-void Communication_DoEvents()
+void Communication::SendPacket(String *stream)
 {
-    static int state3WaitCounter = 0;
-    if (Communication_Valid() && Communication_RepeatTimes(COMM_SPEC_SYMBOL, COMM_RESET_SPEC_NUM))
+    if (GetWiFiConnectionState())
     {
-        COMM_Connect_State = COMM_STATE0;
-        Device_Reset();
+        wifiUDP->beginPacket(serverIPAddress, serverPort);
+        stream = StreamProcess(stream);
+        wifiUDP->print(*stream);
+        wifiUDP->endPacket();
     }
-    //State: Wait for connecting
-    if (COMM_Connect_State == COMM_STATE0)
+}
+
+bool Communication::PacketRecieved()
+{
+    bool retValue = false;
+    int packetSize = wifiUDP->parsePacket();
+    if (packetSize && packetSize < COMMUNICATION_PACK_MAXSIZE)
     {
-        //Write Connect Symbol
-        Communication_SendSpecialData(COMM_CONNECT_SPEC_NUM);
-        //Wait Response
-        if (Communication_WaitForSpecialDataResponse(COMM_SPEC_SYMBOL, COMM_CONNECT_SPEC_NUM, COMM_TIMEOUT))
+        char packetBuffer[COMMUNICATION_PACK_MAXSIZE];
+        ClearRecievedPacket();
+        memset(packetBuffer, '\0', sizeof(char) * COMMUNICATION_PACK_MAXSIZE);
+        wifiUDP->read(packetBuffer, packetSize);
+        *streamRecieved = packetBuffer;
+        streamRecieved = StreamProcess(streamRecieved);
+        retValue = StreamValid(streamRecieved);
+        if (!retValue)
         {
-            COMM_Connect_State = COMM_STATE1;
-            return;
+            ClearRecievedPacket();
         }
-        return;
     }
-    //State: Sending
-    else if (COMM_Connect_State == COMM_STATE1)
+    else if (streamRecieved->length() > COMMUNICATION_STREAMCSTL + 2)
     {
-        //Serial.write(Core_DevicesToSend.devicesToSendCount);
-        //If devices available
-        if (!Core_DevicesToSend.devicesToSendCount)
-        {
-            COMM_Connect_State = COMM_STATE2;
-            return;
-        }
-        //Send devices data
-        int8_t sendPackSize = 0;
-        for (uint8_t i = Core_DevicesToSend.sendStart; i <= Core_DevicesToSend.sendEnd; i++)
-        {
-            if (sendPackSize >= COMM_PACK_MAX_SIZE - 4)
-            {
-                sendPackSize = 0;
-                Serial.write(COMM_END_SYMBOL);
-                //Wait continue
-                if (!Communication_WaitForSpecialDataResponse(COMM_SPEC_SYMBOL, COMM_CONTINUE_SPEC_NUM, COMM_TIMEOUT))
-                {
-                    COMM_Connect_State = COMM_STATE0;
-                    return;
-                }
-                delay(COMM_WAIT_TIME);
-            }
-            if (!sendPackSize)
-            {
-                Serial.write(COMM_START_SYMBOL);
-                sendPackSize++;
-            }
-            if (Core_GetIfDeviceToSend(i))
-            {
-                //Serial.write(i);
-                //Serial.write(Device_GetState(i));
-                //sendPackSize += 3;
-                delay(COMM_CHAR_TIME);
-            }
-            if (i == Core_DevicesToSend.sendEnd)
-            {
-                Serial.write(COMM_END_SYMBOL);
-                //Wait continue
-                if (!Communication_WaitForSpecialDataResponse(COMM_SPEC_SYMBOL, COMM_CONTINUE_SPEC_NUM, COMM_TIMEOUT))
-                {
-                    COMM_Connect_State = COMM_STATE0;
-                    return;
-                }
-                break;
-            }
-        }
-        //Send data trans end
-        Communication_SendSpecialData(COMM_TRANSEND_SPEC_NUM);
-        //Change state to wait response
-        COMM_Connect_State = COMM_STATE2;
-        delay(COMM_WAIT_TIME);
-        return;
+        retValue = true;
     }
-    //State: Wait response
-    else if (COMM_Connect_State == COMM_STATE2)
-    {
-        if (Communication_HasReaded() && Communication_Valid())
-        {
-            state3WaitCounter = 0;
-            if (Communication_RepeatTimes(COMM_SPEC_SYMBOL, COMM_TRANSEND_SPEC_NUM))
-            {
-                COMM_Connect_State = COMM_STATE1;
-                return;
-            }
-            if (Communication_RepeatTimes(COMM_SPEC_SYMBOL, COMM_CLEAR_DEVICES_STATE_NUM))
-            {
-                Device_Reset();
-            }
-            Core_StreamEvents(USART0_Pack, USART0_PackSize);
-            Communication_SendSpecialData(COMM_CONTINUE_SPEC_NUM);
-        }
-        else
-        {
-            delay(COMM_WAIT_TIME);
-            state3WaitCounter++;
-            if (state3WaitCounter > COMM_TIMEOUT)
-            {
-                Serial.flush();
-                state3WaitCounter = 0;
-                COMM_Connect_State = COMM_STATE0;
-                return;
-            }
-        }
-        return;
-    }
+    return retValue;
+}
+
+void Communication::ClearRecievedPacket()
+{
+    streamRecieved->clear();
+}
+
+void Communication::Dispose()
+{
+    delete streamToSend;
+    delete streamRecieved;
 }
