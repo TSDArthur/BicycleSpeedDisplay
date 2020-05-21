@@ -30,6 +30,7 @@
 // 硬件设置
 #define HARDWARE_SENSOR_PIN 32 // 设置霍尔磁传感器引脚编号
 #define HARDWARE_SENSOR_TYPE 0 // 0为下降沿传感器，1为上升沿传感器
+#define HARDWARE_SENSOR_MSPS 4000 // 设置传感器采集周期，单位：ms
 #define HARDWARE_SENSOR_TOZEROTIME 4000 // 传感器无脉冲清零时间，单位：ms
 #define HARDWARE_PWRLED_PIN 35 // 设置设备电源显示LED引脚编号
 #define HARDWARE_CONLED_PIN 34 // 设置设备网络连接状态LED引脚编号
