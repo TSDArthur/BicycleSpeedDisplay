@@ -1,6 +1,8 @@
 #ifndef CORE_H
 #define CORE_H
 
+#define CONFIG_CONSOLE_UART_NONE
+
 #include "Arduino.h"
 #include "Config.h"
 #include "Communication.h"

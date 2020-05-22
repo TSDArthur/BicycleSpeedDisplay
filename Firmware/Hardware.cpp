@@ -4,21 +4,41 @@ Sensor::Sensor(struct SensorBlock *_sensorBlock)
 {
     sensorBlock = _sensorBlock;
     pinMode(sensorBlock->sensorPin, HARDWARE_SENSOR_TYPE == 0 ? INPUT_PULLUP : INPUT_PULLDOWN);
-    attachInterrupt(digitalPinToInterrupt(sensorBlock->sensorPin), sensorBlock->SensorISP,
-                    HARDWARE_SENSOR_TYPE == 0 ? FALLING : RISING);
 }
 
 void Sensor::DoEvents()
 {
-    if(millis() - sensorBlock->lastSampleTime > HARDWARE_SENSOR_TOZEROTIME)
+    static uint64_t lastSensorTrigTime = millis();
+    uint64_t currentTimeMS = millis();
+    if (digitalRead(sensorBlock->sensorPin) == HARDWARE_SENSOR_TYPE)
     {
-        if(sensorBlock->lastPulseCounter == sensorBlock->pulseCounter)
+        if (!sensorBlock->firstPulse && currentTimeMS > lastSensorTrigTime)
+        {
+            sensorBlock->pulseSpeed = HARDWARE_SENSOR_MSPS / (currentTimeMS - lastSensorTrigTime);
+            sensorBlock->pulseCounter++;
+        }
+        else
+        {
+            sensorBlock->firstPulse = false;
+        }
+        while (digitalRead(sensorBlock->sensorPin) == HARDWARE_SENSOR_TYPE)
+        {
+            if (millis() - currentTimeMS >= HARDWARE_SENSOR_DEADAREA_TIMEOUT)
+            {
+                break;
+            }
+        }
+        lastSensorTrigTime = currentTimeMS;
+    }
+    if (currentTimeMS - sensorBlock->lastSampleTime > HARDWARE_SENSOR_TOZEROTIME)
+    {
+        if (sensorBlock->lastPulseCounter == sensorBlock->pulseCounter)
         {
             sensorBlock->firstPulse = true;
             sensorBlock->pulseSpeed = 0;
         }
         sensorBlock->lastPulseCounter = sensorBlock->pulseCounter;
-        sensorBlock->lastSampleTime = millis();
+        sensorBlock->lastSampleTime = currentTimeMS;
     }
 }
 

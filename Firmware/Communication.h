@@ -28,16 +28,23 @@ struct CommunicationStateBlock
     {                                                                                 \
         switch (event)                                                                \
         {                                                                             \
-        case SYSTEM_EVENT_STA_GOT_IP:                                                 \
+        case SYSTEM_EVENT_STA_CONNECTED:                                              \
             structName.WiFiCommunicated = true;                                       \
             structName.ServerCommunicated = false;                                    \
             structName.communicationState = OFFLINE;                                  \
+            if (APP_DEBUG_MODE)                                                       \
+            {                                                                         \
+                Serial.println("WiFi Connected.");                                    \
+            }                                                                         \
             break;                                                                    \
-        case SYSTEM_EVENT_STA_LOST_IP:                                                \
         case SYSTEM_EVENT_STA_DISCONNECTED:                                           \
             structName.WiFiCommunicated = false;                                      \
             structName.ServerCommunicated = false;                                    \
             structName.communicationState = OFFLINE;                                  \
+            if (APP_DEBUG_MODE)                                                       \
+            {                                                                         \
+                Serial.println("WiFi Disconnected.");                                 \
+            }                                                                         \
             break;                                                                    \
         default:                                                                      \
             break;                                                                    \
@@ -70,6 +77,7 @@ public:
     void SendPacket(String *stream);
     bool PacketRecieved();
     void ClearRecievedPacket();
+    void ReconnectToWiFi();
     void Dispose();
 };
 

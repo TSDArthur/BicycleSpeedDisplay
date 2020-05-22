@@ -9,13 +9,19 @@ LED *LEDDisplay;
 
 void SystemInitialize()
 {
+    if (APP_DEBUG_MODE)
+    {
+        Serial.setDebugOutput(0);
+        Serial.begin(APP_DEBUG_SERIAL_BADURATE);
+        Serial.println("System Initializing...");
+    }
     CommunicationManager = new Communication(&communicaionState, COMMUNICATION_WIFI_SSID, COMMUNICATION_WIFI_PASSWORD, COMMUNICATION_UDP_SERVER_IP,
                                              COMMUNICATION_UDP_SERVER_PORT, COMMUNICATION_UDP_LOCAL_PORT, COMMUNICATION_ENCRKEY);
     SpeedSensor = new Sensor(&sensorState);
     LEDDisplay = new LED(HARDWARE_PWRLED_PIN, HARDWARE_CONLED_PIN);
     // 启用RTOS调度器
     xTaskCreatePinnedToCore(
-        SensorSamplingTask, "SensorSamplingTask", RTOS_STACK_BYTES, NULL, RTOS_HIGH_PRIORITY, NULL, 0);
+        SensorSamplingTask, "SensorSamplingTask", RTOS_STACK_BYTES, NULL, RTOS_HIGH_PRIORITY, NULL, 1);
     xTaskCreatePinnedToCore(
         UDPCommunicationTask, "UDPCommunicationTask", RTOS_STACK_BYTES, NULL, RTOS_MID_PRIORITY, NULL, 1);
     xTaskCreatePinnedToCore(
@@ -26,11 +32,9 @@ void SensorSamplingTask(void *parameter)
 {
     while (true)
     {
-        portENTER_CRITICAL(&muxSensorISP);
         SpeedSensor->DoEvents();
         // 覆写队列数据
-        xQueueOverwrite(sensorState.speedInfo, (void *)&(sensorState.pulseSpeed));
-        portEXIT_CRITICAL(&muxSensorISP);
+        xQueueOverwrite(sensorState.speedInfo, (void *)&(SpeedSensor->sensorBlock->pulseSpeed));
         vTaskDelay(HARDWARE_SENSOR_REFRESHTIME / portTICK_RATE_MS);
     }
     vTaskDelete(NULL);
@@ -38,10 +42,12 @@ void SensorSamplingTask(void *parameter)
 
 void UDPCommunicationTask(void *parameter)
 {
+    static int disconnectedTimeoutCounter = 0;
     while (true)
     {
         if (CommunicationManager->GetWiFiConnectionState())
         {
+            disconnectedTimeoutCounter = 0;
             if (CommunicationManager->communicationStateBlock->communicationState == OFFLINE ||
                 CommunicationManager->communicationStateBlock->communicationState == SENDCLIENTNAME ||
                 CommunicationManager->communicationStateBlock->communicationState == SENDDATA)
@@ -51,12 +57,11 @@ void UDPCommunicationTask(void *parameter)
                 CommunicationManager->ClearRecievedPacket();
                 if (CommunicationManager->communicationStateBlock->communicationState == SENDDATA)
                 {
-                    // 从消息队列取出5s内的脉冲数量
+                    // 从消息队列取出Xs内的脉冲数量
                     xQueueReceive(sensorState.speedInfo, &dataValue, portMAX_DELAY);
                 }
                 CommunicationManager->StreamBuilder(CommunicationManager->streamToSend,
                                                     CommunicationManager->communicationStateBlock->communicationState, dataValue);
-                CommunicationManager->StreamProcess(CommunicationManager->streamToSend);
                 CommunicationManager->SendPacket(CommunicationManager->streamToSend);
                 CommunicationManager->communicationStateBlock->communicationState = WAITFORRESP;
             }
@@ -97,6 +102,16 @@ void UDPCommunicationTask(void *parameter)
         else
         {
             CommunicationManager->communicationStateBlock->communicationState = OFFLINE;
+            disconnectedTimeoutCounter++;
+            if (disconnectedTimeoutCounter >= COMMUNICATION_LOST_CONN_RESET_TIMEOUT / COMMUNICATION_REQUIRE_INV)
+            {
+                if (APP_DEBUG_MODE)
+                {
+                    Serial.println("Ready To Reboot.");
+                }
+                disconnectedTimeoutCounter = 0;
+                CommunicationManager->ReconnectToWiFi();
+            }
         }
     EndPoint:
         vTaskDelay(COMMUNICATION_REQUIRE_INV / portTICK_RATE_MS);

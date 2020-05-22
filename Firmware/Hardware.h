@@ -6,39 +6,18 @@
 
 struct SensorBlock
 {
-    void (*SensorISP)();
     xQueueHandle speedInfo;
     volatile uint8_t sensorPin;
     volatile bool firstPulse;
-    volatile uint16_t pulseSpeed;
+    volatile uint32_t pulseSpeed;
     volatile uint32_t pulseCounter;
     volatile uint32_t lastPulseCounter;
     volatile uint32_t lastSampleTime;
 };
 
-#define SensorState(structName, sensorISPName)                                                  \
-    void sensorISPName();                                                                       \
-    portMUX_TYPE muxSensorISP;                                                                  \
-    struct SensorBlock structName = {sensorISPName, xQueueCreate(1, sizeof(int)),               \
-                                     HARDWARE_SENSOR_PIN, true, 0, 0, 0, 0};                    \
-    void sensorISPName()                                                                        \
-    {                                                                                           \
-        portENTER_CRITICAL_ISR(&muxSensorISP);                                                  \
-        static uint32_t pulseStartMillis = millis();                                            \
-        static uint32_t pulseEndMillis = millis();                                              \
-        pulseEndMillis = millis();                                                              \
-        if (!structName.firstPulse && pulseEndMillis > pulseStartMillis)                        \
-        {                                                                                       \
-            structName.pulseSpeed = HARDWARE_SENSOR_MSPS / (pulseEndMillis - pulseStartMillis); \
-            structName.pulseCounter++;                                                          \
-        }                                                                                       \
-        else                                                                                    \
-        {                                                                                       \
-            structName.firstPulse = false;                                                      \
-        }                                                                                       \
-        pulseStartMillis = pulseEndMillis;                                                      \
-        portEXIT_CRITICAL_ISR(&muxSensorISP);                                                   \
-    }
+#define SensorState(structName, sensorISPName)                     \
+    struct SensorBlock structName = {xQueueCreate(1, sizeof(int)), \
+                                     HARDWARE_SENSOR_PIN, true, 0, 0, 0, 0};
 
 class Sensor
 {

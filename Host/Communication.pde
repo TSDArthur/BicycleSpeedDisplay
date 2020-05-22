@@ -108,28 +108,13 @@ public class Communication
         return retValue;
     }
     
-    private Object GetDataFromStream(String stream, CommunicationState streamType)
+    private Object GetDataFromStream(String stream)
     {
         Object retValue = null;
         try
         {
-            switch(streamType)
-            {
-                case OFFLINE:
-                  break;
-                case NAME_RECIEVE:
-                {
-                    retValue = new String(stream.substring(Config.COMMUNICATION_STREAMCSTL + 1, 
-                      stream.length() - 1));
-                    break;
-                }
-                case DATA_RECIEVE:
-                {
-                    retValue = Integer.valueOf(stream.substring(Config.COMMUNICATION_STREAMCSTL + 1,
-                      stream.length() - 1));
-                    break;
-                }
-            }
+            retValue = new String(stream.substring(Config.COMMUNICATION_STREAMCSTL + 1, 
+              stream.length() - 1));
         }
         catch(Exception e)
         {
@@ -167,20 +152,22 @@ public class Communication
         double retValue = clientDataSet.speedMPS;
         return retValue;
     }
-    
+     
     private void SendData(String stream)
     {
-        PrintStreamInfo("Stream: Send " + stream + " To Client " + clientIPAddress + "."); 
-        communicationUDP.send(stream);
+        PrintStreamInfo(currentTimeMS + " Stream: Send " + 
+          stream + " To Client " + clientIPAddress + ".");
+        communicationUDP.send(stream, clientIPAddress, Config.COMMUNICATION_UDP_CLIENT_PORT);
     }
     
     public void DoEvents(String streamRecieved, long callTime)
     {
+        PrintStreamInfo(currentTimeMS + " Stream: Recieved " + 
+          streamRecieved + " From Client " + clientIPAddress + "."); 
         String streamDecoded = StreamProcess(streamRecieved);
         boolean postbackEnable = false;
         if (StreamFormatCheck(streamDecoded))
         {
-            PrintStreamInfo("Stream: Recieved " + streamDecoded + " From Client " + clientIPAddress + "."); 
             // Reset All
             if (StreamContentCheck(streamDecoded, CommunicationState.OFFLINE))
             {
@@ -192,8 +179,7 @@ public class Communication
             {
                 if (StreamContentCheck(streamDecoded, CommunicationState.NAME_RECIEVE))
                 {
-                    clientName = (String)GetDataFromStream(streamDecoded, 
-                      CommunicationState.NAME_RECIEVE);
+                    clientName = (String)GetDataFromStream(streamDecoded);
                     communicationState = CommunicationState.DATA_RECIEVE;
                     postbackEnable = true;
                 }
@@ -203,8 +189,7 @@ public class Communication
                 if (StreamContentCheck(streamDecoded, CommunicationState.DATA_RECIEVE))
                 {
                     clientDataSet.SetSpeedRaw(
-                      ((Integer)GetDataFromStream(streamDecoded, 
-                      CommunicationState.NAME_RECIEVE)).intValue());
+                      Integer.parseInt(GetDataFromStream(streamDecoded).toString()));
                     postbackEnable = true;
                 }
             }
@@ -237,10 +222,12 @@ void CommunicationHandler(long currentTime)
     {
         if(currentTime - ((Communication)(entry.getValue())).lastRecievedTime > Config.COMMUNICATION_TIMEOUT)
         {
-            PrintDebugInfo("Debug: Client " + entry.getKey() + " Disconnected.");
+            PrintDebugInfo(currentTimeMS + " Debug: Client " + 
+              entry.getKey() + " Disconnected.");
             ipAddressList.remove(entry.getKey());
             ipAddressToCommunication.remove(entry.getKey());
-            PrintDebugInfo("Debug: Client Count: " + ipAddressToCommunication.size() + ".");
+            PrintDebugInfo(currentTimeMS + " Debug: Client Count: " + 
+              ipAddressToCommunication.size() + ".");
         }
     }
 }
@@ -253,8 +240,10 @@ void UDPRecieveHandler(byte[] data, String ip, int port)
         ipAddressList.add(ip);
         Communication newCommunication = new Communication(ip, ip, port);
         ipAddressToCommunication.put(ip, newCommunication);
-        PrintDebugInfo("Debug: Client " + ip + ":" + port + " Connected.");
-        PrintDebugInfo("Debug: Client Count: " + ipAddressToCommunication.size() + ".");
+        PrintDebugInfo(currentTimeMS + " Debug: Client " + 
+          ip + ":" + port + " Connected.");
+        PrintDebugInfo(currentTimeMS + " Debug: Client Count: " + 
+          ipAddressToCommunication.size() + ".");
     }
     ((Communication)ipAddressToCommunication.get(ip)).DoEvents(streamRecieved, currentTimeMS);
 }

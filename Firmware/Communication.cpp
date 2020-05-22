@@ -87,7 +87,7 @@ bool Communication::StreamContentCheck(String *stream, CommunicationState stream
     switch (streamType)
     {
     case WAITFORRESP:
-        if (stream->substring(1, stream->length() - 2) == COMMUNICATION_RESPONSESTR)
+        if (stream->substring(1, stream->length() - 1) == COMMUNICATION_RESPONSESTR)
         {
             retValue = true;
         }
@@ -102,6 +102,10 @@ void Communication::SendPacket(String *stream)
     {
         wifiUDP->beginPacket(serverIPAddress, serverPort);
         stream = StreamProcess(stream);
+        if (APP_DEBUG_MODE)
+        {
+            Serial.println("Send: " + *stream);
+        }
         wifiUDP->print(*stream);
         wifiUDP->endPacket();
     }
@@ -127,6 +131,10 @@ bool Communication::PacketRecieved()
     }
     else if (streamRecieved->length() > COMMUNICATION_STREAMCSTL + 2)
     {
+        if (APP_DEBUG_MODE)
+        {
+            Serial.println("Recieved: " + *streamRecieved);
+        }
         retValue = true;
     }
     return retValue;
@@ -135,6 +143,11 @@ bool Communication::PacketRecieved()
 void Communication::ClearRecievedPacket()
 {
     streamRecieved->clear();
+}
+
+void Communication::ReconnectToWiFi()
+{
+    ESP.restart();
 }
 
 void Communication::Dispose()

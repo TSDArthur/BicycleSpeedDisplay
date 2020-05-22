@@ -4,6 +4,9 @@
         "random": "cpp",
         "xlocale": "cpp",
         "xstring": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "system_error": "cpp",
+        "memory": "cpp",
+        "optional": "cpp"
     }
 }
