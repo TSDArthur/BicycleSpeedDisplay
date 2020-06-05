@@ -1,11 +1,11 @@
-# 大运会项目：自行车速度采集与处理平台
+# Bicycle Interactive Art Control System
 
-# 文件夹
+# Folders
 
-- Firmware：固件
+- Firmware
 
-- Host：上位机软件
+- Host
 
-- Mechanical：机壳结构设计
+- Mechanical
 
-- PCB：印刷电路板设计
+- PCB
