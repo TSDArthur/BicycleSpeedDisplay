@@ -1,12 +1,11 @@
 {
     "files.associations": {
+        "array": "cpp",
+        "deque": "cpp",
         "string": "cpp",
-        "random": "cpp",
-        "xlocale": "cpp",
-        "xstring": "cpp",
-        "string_view": "cpp",
-        "system_error": "cpp",
-        "memory": "cpp",
-        "optional": "cpp"
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "initializer_list": "cpp"
     }
 }
